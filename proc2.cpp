@@ -4,13 +4,14 @@
 #include <vector>
 #include <regex>
 
-
 /* C libraries so we can use the sockets API at its fullest */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h> // for ``close ()''
 
+/* "local" includes */
+#include "sock.hpp"
 
 /* General diagram */
 
@@ -37,62 +38,6 @@
  * result;
  * p3 : will ``bind ()'', ``listen ()'' and ``recv ()''.
  */
-
-class sock_info {
-public:
-  int descriptor{0};
-  struct addrinfo* result;
-
-  sock_info (int sock, struct addrinfo* res) : descriptor{sock}, result{res}
-  {}
-  
-  ~sock_info ()
-  {
-    freeaddrinfo (result);
-    close (descriptor);
-  }
-};
-
-std::unique_ptr <sock_info>
-get_info (std::string port_number)
-{
-  /* kinda stupid, but here we are*/
-  if (std::stoi (port_number) < 1025)
-    throw 0; // 0 - passed in a reserved port number
-
-  int sock_desc {};
-  struct addrinfo hardcoded_info {0};
-  struct addrinfo* result;
-
-  /* IPV4, Stream socket (TCP) and use my hostname */
-  hardcoded_info.ai_family = AF_UNSPEC;
-  hardcoded_info.ai_socktype = SOCK_STREAM;
-  hardcoded_info.ai_flags = AI_PASSIVE;
-
-
-  int status {getaddrinfo(NULL, port_number.c_str (), &hardcoded_info, &result)};
-
-  if (status != 0)
-    throw 1; // couldn't get address info
-
-  struct addrinfo* current{};
-  for (current = result;
-       current != nullptr;
-       current = current->ai_next)
-    {
-      sock_desc = socket (current->ai_family,
-			  current->ai_socktype,
-			  current->ai_protocol);
-
-      if (sock_desc != -1)
-	break;
-    }
-
-  if (!current)
-    throw 2; // couldn't get a socket descriptor
-
-  return std::make_unique <sock_info> (sock_desc, current);
-}
 
 long long
 sieve_of_erastosthenes (int n)
@@ -121,8 +66,8 @@ sieve_of_erastosthenes (int n)
 bool
 check_key (long long key, long long n)
 {
-  return (key >= 1'000'000
-	  && key >= sieve_of_erastosthenes (2 * n));
+  /* TODO: make this condition */
+  return false;
 }
 
 int
@@ -131,15 +76,19 @@ main ()
   /* buffer for our string operations and its size in bytes */
   int buffer_size {100};
   char buffer[buffer_size];
-  std::fill (buffer, buffer + buffer_size, '\0'); 
+  std::fill (buffer, buffer + buffer_size, '\0');
+
+  
   // descriptor that we'll gonna use to communicate with p1
   std::unique_ptr <sock_info> proc2_info;
+  
   try
     {
       proc2_info = get_info ("20001");
     }
   catch (int& error)
     {
+      std::cerr << "Couldn't create a descriptor, exiting... " << std::endl;
       std::cerr << error << std::endl;
       return 1;
     }
@@ -186,31 +135,48 @@ main ()
   std::regex_search (buffer + f_match.length (), s_match, numb_regex);
   long long n {std::stoll (s_match[0])};
 
+  
+  int length {buffer_size - 1};
+
   /* check if the key sent is valid */
   if (check_key (key, n))
     {
-      std::unique_ptr <sock_info> proc3_info {get_info ("20002")};
-
-      /* it's gonna be faster if you init p3 FIRST */
-      while (connect (proc3_info->descriptor,
-		      proc3_info->result->ai_addr,
-		      proc3_info->result->ai_addrlen) != -1);
-
+      
+      std::unique_ptr <sock_info> proc3_info;
+      try
+	{
+	  proc3_info = get_info ("20002");
+	}
+      catch (int& error)
+	{
+	  std::cerr << "Couldn't create a descriptor, exiting... " << std::endl;
+	  std::cerr << error << std::endl;
+	  return 1;
+	}
+      
+      /* it'll only work if p3 is started first (no error checking) */
+      if (connect (proc3_info->descriptor,
+		   proc3_info->result->ai_addr,
+		   proc3_info->result->ai_addrlen) == -1)
+	  return 1;
       
       /* send in the string */
-      send (proc3_info->descriptor, buffer, buffer_size, 0);
-
+      complete_send (proc3_info->descriptor, buffer, length);
+      
       /* get our final result into our buffer*/
       std::fill (buffer, buffer + buffer_size, '\0');
-      recv (proc3_info->descriptor, buffer, buffer_size - 1, 0);
+      int s = recv (proc3_info->descriptor, buffer, length, 0);
 
       /* send it back to p1 */
-      send (p1_info.descriptor, buffer, buffer_size, 0);
+      complete_send (p1_info.descriptor, buffer, length);
     }
   else
     {
-      send (p1_info.descriptor, "d", 2, 0);
+      std::string denied_message{"d"};
+      length = denied_message.size () + 1;
+      complete_send (p1_info.descriptor, denied_message.c_str (), length);
     }
+
 
   return 0;
 }
