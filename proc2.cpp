@@ -168,8 +168,9 @@ int main()
         complete_send(p1_info.descriptor, buffer, length);
       } else {
         std::string denied_message{"d"};
-        length = denied_message.size() + 1;
-        complete_send(p1_info.descriptor, denied_message.c_str(), length);
+        complete_send(p1_info.descriptor,
+		      denied_message.c_str(),
+		      denied_message.size () + 1);
       }
     }
 
