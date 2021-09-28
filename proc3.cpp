@@ -42,9 +42,9 @@ std::uint64_t nthPrime(const int code, const int n, const int step) {
 
 std::uint64_t calculateKey(int code, int n) {
   std::future<std::uint64_t> f1 = std::async(
-      std::launch::async, [code, n]() { return nthPrime(code, n, 1); });
+      std::launch::async, [code, n]() { return nthPrime(code + 1, n, 1); });
   std::future<std::uint64_t> f2 = std::async(
-      std::launch::async, [code, n]() { return nthPrime(code, n, -1); });
+      std::launch::async, [code, n]() { return nthPrime(code - 1, n, -1); });
 
   f1.wait();
   f2.wait();
