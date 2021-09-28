@@ -89,30 +89,33 @@ int main(int argc, char *argv[]) {
   sock_info p2_info{
       accept(p3_info->descriptor, (struct sockaddr *)&addr, &addr_size),
       nullptr};
+  while (true) {
+    int recv_bytes{
+        static_cast<int>(recv(p2_info.descriptor, buffer, buffer_size - 1, 0))};
 
-  int recv_bytes{
-      static_cast<int>(recv(p2_info.descriptor, buffer, buffer_size - 1, 0))};
+    if (!recv_bytes)
+      break;
 
-  /* we're supposed to get key<whitespace>number */
-  /* but regexp allows us to get any kind of number that is separated
-   by any kind of separator, so that's nice (still can get garbage) */
-  std::cmatch f_match;
-  std::cmatch s_match;
-  std::regex numb_regex{"([0-9]+)"};
+    /* we're supposed to get key<whitespace>number */
+    /* but regexp allows us to get any kind of number that is separated
+       by any kind of separator, so that's nice (still can get garbage) */
+    std::cmatch f_match;
+    std::cmatch s_match;
+    std::regex numb_regex{"([0-9]+)"};
 
-  /* FUCKIN RAW */
-  std::regex_search(buffer, f_match, numb_regex);
-  std::uint64_t code{static_cast<uint64_t>(std::stoll(f_match[0]))};
+    /* FUCKIN RAW */
+    std::regex_search(buffer, f_match, numb_regex);
+    std::uint64_t code{static_cast<uint64_t>(std::stoll(f_match[0]))};
 
-  /* now we get our key (no error checking for now) */
-  std::regex_search(buffer + f_match.length(), s_match, numb_regex);
-  std::uint64_t n{static_cast<uint64_t>(std::stoll(s_match[0]))};
+    /* now we get our key (no error checking for now) */
+    std::regex_search(buffer + f_match.length(), s_match, numb_regex);
+    std::uint64_t n{static_cast<uint64_t>(std::stoll(s_match[0]))};
 
-  std::string key{std::to_string(calculateKey(code, n))};
-  int length{static_cast<int>(key.size() + 1)};
+    std::string key{std::to_string(calculateKey(code, n))};
+    int length{static_cast<int>(key.size() + 1)};
 
-  if ((complete_send(p2_info.descriptor, key.c_str(), length)) == -1)
-    std::cout << "error" << std::endl;
-
+    if ((complete_send(p2_info.descriptor, key.c_str(), length)) == -1)
+      std::cout << "error" << std::endl;
+  }
   return 0;
 }

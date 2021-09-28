@@ -67,7 +67,7 @@ bool
 check_key (long long key, long long n)
 {
   /* TODO: make this condition */
-  return false;
+  return true;
 }
 
 int
@@ -93,6 +93,26 @@ main ()
       return 1;
     }
 
+  /* P3 */
+  std::unique_ptr <sock_info> proc3_info;
+      
+  try
+    {
+      proc3_info = get_info ("20002");
+    }
+  catch (int& error)
+    {
+      std::cerr << "Couldn't create a descriptor, exiting... " << std::endl;
+      std::cerr << error << std::endl;
+      return 1;
+    }
+      
+  /* it'll only work if p3 is started first (no error checking) */
+  if (connect (proc3_info->descriptor,
+	       proc3_info->result->ai_addr,
+	       proc3_info->result->ai_addrlen) == -1)
+    return 1;
+  
   // if that socket is still hanging, reuse it
   int yes {1};
   if (setsockopt (proc2_info->descriptor, SOL_SOCKET,
@@ -101,82 +121,69 @@ main ()
   
   // don't judge me 
   if ((bind (proc2_info->descriptor,
-	    proc2_info->result->ai_addr,
-	    proc2_info->result->ai_addrlen) == -1)
+	     proc2_info->result->ai_addr,
+	     proc2_info->result->ai_addrlen) == -1)
       || listen (proc2_info->descriptor, 1) == -1)
     return 1;
 
-  // accepting p1's connection (and everyone else)
-  struct sockaddr_storage addr{}; 
-  socklen_t addr_size {sizeof (addr)};
+    // accepting p1's connection (and everyone else)
+    struct sockaddr_storage addr{}; 
+    socklen_t addr_size {sizeof (addr)};
 
-  sock_info p1_info{accept (proc2_info->descriptor,
-			    (struct sockaddr *)&addr,
-			    &addr_size), nullptr};
+    sock_info p1_info{accept (proc2_info->descriptor,
+			      (struct sockaddr *)&addr,
+			      &addr_size), nullptr};
+
+    int length {buffer_size - 1};
+    while (true)
+      {
+	/* now we can finally begin */
+	int recv_bytes {static_cast<int>(recv (p1_info.descriptor,
+					       buffer,
+					       length,
+					       0))};
+
+	if (!recv_bytes)
+	    break;
+	
+	/* we're supposed to get key<whitespace>number */
+	/* but regexp allows us to get any kind of number that is separated
+	   by any kind of separator, so that's nice (still can get garbage) */
+	std::cmatch f_match;
+	std::cmatch s_match;
+	std::regex numb_regex {"([0-9]+)"};
+
+	/* FUCKIN RAW */
+	std::regex_search (buffer, f_match, numb_regex);
+	long long key {std::stoll (f_match[0])};
+
+	/* now we get our key (no error checking for now) */
+	std::regex_search (buffer + f_match.length (), s_match, numb_regex);
+	long long n {std::stoll (s_match[0])};
   
-  /* now we can finally begin */
-  int recv_bytes {static_cast<int>(recv (p1_info.descriptor,
-					 buffer,
-					 buffer_size - 1,
-					 0))};
 
-  /* we're supposed to get key<whitespace>number */
-  /* but regexp allows us to get any kind of number that is separated
-   by any kind of separator, so that's nice (still can get garbage) */
-  std::cmatch f_match;
-  std::cmatch s_match;
-  std::regex numb_regex {"([0-9]+)"};
+	/* check if the key sent is valid */
+	if (check_key (key, n))
+	  {
+	    /* send in the string */
+	    complete_send (proc3_info->descriptor, buffer, length);
+      
+	    /* get our final result into our buffer*/
+	    std::fill (buffer, buffer + buffer_size, '\0');
+	    int s = recv (proc3_info->descriptor, buffer, length, 0);
 
-  /* FUCKIN RAW */
-  std::regex_search (buffer, f_match, numb_regex);
-  long long key {std::stoll (f_match[0])};
+	    /* send it back to p1 */
+	    complete_send (p1_info.descriptor, buffer, length);
+	  }
+	else
+	  {
+	    std::string denied_message{"d"};
+	    length = denied_message.size () + 1;
+	    complete_send (p1_info.descriptor, denied_message.c_str (), length);
+	  }
 
-  /* now we get our key (no error checking for now) */
-  std::regex_search (buffer + f_match.length (), s_match, numb_regex);
-  long long n {std::stoll (s_match[0])};
-
+      }
   
-  int length {buffer_size - 1};
 
-  /* check if the key sent is valid */
-  if (check_key (key, n))
-    {
-      
-      std::unique_ptr <sock_info> proc3_info;
-      try
-	{
-	  proc3_info = get_info ("20002");
-	}
-      catch (int& error)
-	{
-	  std::cerr << "Couldn't create a descriptor, exiting... " << std::endl;
-	  std::cerr << error << std::endl;
-	  return 1;
-	}
-      
-      /* it'll only work if p3 is started first (no error checking) */
-      if (connect (proc3_info->descriptor,
-		   proc3_info->result->ai_addr,
-		   proc3_info->result->ai_addrlen) == -1)
-	  return 1;
-      
-      /* send in the string */
-      complete_send (proc3_info->descriptor, buffer, length);
-      
-      /* get our final result into our buffer*/
-      std::fill (buffer, buffer + buffer_size, '\0');
-      int s = recv (proc3_info->descriptor, buffer, length, 0);
-
-      /* send it back to p1 */
-      complete_send (p1_info.descriptor, buffer, length);
-    }
-  else
-    {
-      std::string denied_message{"d"};
-      length = denied_message.size () + 1;
-      complete_send (p1_info.descriptor, denied_message.c_str (), length);
-    }
-
-
-  return 0;
+    return 0;
 }
