@@ -1,14 +1,26 @@
 import socket, sys
 import pandas as pd
+import struct
 
 def request_key(values, sock):
     counter = 0
 
     for initial_value, n in values:
-        sock.sendall(bytes((f'{initial_value} {n}').encode('UTF-8')))
-        answer = sock.recv(1024).decode()
-        print(f'Resposta do servidor: {answer}')
-        if answer != "d": counter += 1
+        # send in ``initial_value'' first
+        sock.sendall(struct.pack("!l", initial_value))
+        # then send ``n''
+        sock.sendall(struct.pack("!l", n))
+
+        # get our key
+        answer = sock.recv(64)
+        
+        data = struct.unpack("!Q", answer)[0]
+        if data == 0:
+            continue
+        
+        print(f'Resposta do servidor: {data}')
+        counter += 1
+        
 
     print(f'{counter} chaves foram geradas!')
     sock.close()
