@@ -1,0 +1,22 @@
+#+title: Multiprimos
+
+Trata-se do processo de /benchmarking/ pedido na atividade 4 para a matéria de Sistemas Distribuídos do curso de Ciência da Computação da FEI. Três processos principais são criados e estes têm o objetivo de comunicar entre si através dos conhecidos /sockets/ num processo de geração de chaves baseado no cálculo de números primos.
+
+* Dependências
+
+O projeto foi primariamente desenvolvido em/para sistemas GNU/Linux, sendo testado num Arch Linux AMD64. Existem algumas dependências necessárias para a compilação correta dos arquivos escritos em C++.
+
+- Compilador para C++, testado com ~g++~
+- *Posix* threads, libpthread
+- *opcional*: make, para /build/ automatizado com base no [[file:Makefile][Makefile]]
+
+* Execução do /benchmark/ 
+
+Após a compilação dos dois processos, ~proc2 e proc3~, basta executar o /script/ ~run.sh~ com o dataset de exemplo ~file.csv~ presente na pasta raiz:
+
+: ./run.sh
+
+Este iniciará os três processos na ordem correta ~proc3 -> proc2 -> proc1~, uma vez que checagens de falha de conexão provocam a terminação destes. Se desejado, basta executá-los nesta ordem que o comportamento será o *mesmo*.
+
+Serão executados cinquenta testes seguidos com o tempo, média e desvio padrão mostrados ao final.
+
